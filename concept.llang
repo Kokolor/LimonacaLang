@@ -1,0 +1,14 @@
+extern write(txt: str, ...);
+
+const message: str = "Hello, World!\n";
+const number: i16 = 47;
+
+fn add(x: i32, y: i32): i32 = {
+    return x + y;
+}
+
+fn main(): void = {
+    var sum: i32 = add(<i32>number, 13);
+    write("String: {}\nSum: {}", message, sum);
+    return 0;
+}
