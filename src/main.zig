@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const TokenType = enum { Plus, Minus, Star, Slash, Number, Eof };
+pub const TokenType = enum { Plus, Minus, Star, Slash, Equal, Number, Identifier, Eof };
 
 pub const Token = struct { type: TokenType, value: ?[]const u8, line: u64 };
 
@@ -23,13 +23,28 @@ pub const Lexer = struct {
             const character = self.source[self.current];
             self.current += 1;
 
-            if (std.ascii.isDigit(character)) {
+            if (std.ascii.isDigit(character) or character == '_') {
                 self.start = self.current - 1;
-                while (!self.isAtEnd() and std.ascii.isDigit(self.source[self.current])) {
+                while (!self.isAtEnd() and (std.ascii.isAlphanumeric(self.source[self.current]) or self.source[self.current] == '_')) {
                     self.current += 1;
                 }
 
-                try self.tokens.append(Token{ .type = TokenType.Number, .value = self.source[self.start..self.current], .line = self.line });
+                const token_value = self.source[self.start..self.current];
+                if (std.ascii.isDigit(token_value[0])) {
+                    try self.tokens.append(Token{ .type = TokenType.Number, .value = token_value, .line = self.line });
+                } else {
+                    try self.tokens.append(Token{ .type = TokenType.Identifier, .value = token_value, .line = self.line });
+                }
+                continue;
+            }
+
+            if (std.ascii.isAlphanumeric(character)) {
+                self.start = self.current - 1;
+                while (!self.isAtEnd() and (std.ascii.isAlphanumeric(self.source[self.current]) or self.source[self.current] == '_')) {
+                    self.current += 1;
+                }
+
+                try self.tokens.append(Token{ .type = TokenType.Identifier, .value = self.source[self.start..self.current], .line = self.line });
                 continue;
             }
 
@@ -44,6 +59,7 @@ pub const Lexer = struct {
                 '-' => try self.tokens.append(Token{ .type = TokenType.Minus, .value = null, .line = self.line }),
                 '*' => try self.tokens.append(Token{ .type = TokenType.Star, .value = null, .line = self.line }),
                 '/' => try self.tokens.append(Token{ .type = TokenType.Slash, .value = null, .line = self.line }),
+                '=' => try self.tokens.append(Token{ .type = TokenType.Equal, .value = null, .line = self.line }),
                 else => {},
             }
         }
@@ -61,7 +77,7 @@ pub fn main() !void {
     var lexer = Lexer{
         .allocator = allocator,
         .tokens = std.ArrayList(Token).init(allocator),
-        .source = "74 + 2",
+        .source = "_hello = 74 + 2\n42test =        63 - 7",
     };
 
     try lexer.init(allocator, lexer.source);
