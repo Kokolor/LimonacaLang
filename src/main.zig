@@ -1,8 +1,12 @@
 const std = @import("std");
 
-pub const TokenType = enum { Plus, Minus, Star, Slash, Equal, Number, Identifier, Eof };
+pub const TokenType = enum { Plus, Minus, Star, Slash, Equal, Number, Colon, Semicolon, Identifier, Eof };
 
 pub const Token = struct { type: TokenType, value: ?[]const u8, line: u64 };
+
+const LexerError = error {
+    UnknownCharacter
+};
 
 pub const Lexer = struct {
     allocator: std.mem.Allocator,
@@ -60,7 +64,11 @@ pub const Lexer = struct {
                 '*' => try self.tokens.append(Token{ .type = TokenType.Star, .value = null, .line = self.line }),
                 '/' => try self.tokens.append(Token{ .type = TokenType.Slash, .value = null, .line = self.line }),
                 '=' => try self.tokens.append(Token{ .type = TokenType.Equal, .value = null, .line = self.line }),
-                else => {},
+                ':' => try self.tokens.append(Token{ .type = TokenType.Colon, .value = null, .line = self.line }),
+                ';' => try self.tokens.append(Token{ .type = TokenType.Semicolon, .value = null, .line = self.line }),
+                else => {
+                    return LexerError.UnknownCharacter;
+                },
             }
         }
 
