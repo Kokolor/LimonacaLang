@@ -29,10 +29,12 @@ pub const Lexer = struct {
     current: u64 = 0,
     line: u64 = 1,
 
-    pub fn init(self: *Lexer, allocator: std.mem.Allocator, source: []const u8) !void {
-        self.allocator = allocator;
-        self.tokens = std.ArrayList(Token).init(allocator);
-        self.source = source;
+    pub fn init(allocator: std.mem.Allocator, source: []const u8) Lexer {
+        return Lexer{
+            .allocator = allocator,
+            .tokens = std.ArrayList(Token).init(allocator),
+            .source = source,
+        };
     }
 
     pub fn scan(self: *Lexer) !void {
