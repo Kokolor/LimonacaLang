@@ -170,18 +170,40 @@ pub const Parser = struct {
     }
 
     pub fn parseExpression(self: *Parser) !*Expression {
+        var left = try self.parseTerm();
+
+        while (self.match(lexer.TokenType.Plus) or self.match(lexer.TokenType.Minus)) {
+            const operator = self.tokens[self.current - 1].type;
+            const right = try self.parseTerm();
+            const binary_op = try self.allocator.create(Expression);
+            binary_op.* = Expression{
+                .BinaryOp = .{
+                    .left = left,
+                    .operator = operator,
+                    .right = right,
+                },
+            };
+            left = binary_op;
+        }
+
+        return left;
+    }
+
+    pub fn parseTerm(self: *Parser) !*Expression {
         var left = try self.parsePrimary();
 
-        while (self.match(lexer.TokenType.Plus) or self.match(lexer.TokenType.Minus) or self.match(lexer.TokenType.Star) or self.match(lexer.TokenType.Slash)) {
+        while (self.match(lexer.TokenType.Star) or self.match(lexer.TokenType.Slash)) {
             const operator = self.tokens[self.current - 1].type;
             const right = try self.parsePrimary();
-
             const binary_op = try self.allocator.create(Expression);
-            binary_op.* = Expression{ .BinaryOp = .{
-                .left = left,
-                .operator = operator,
-                .right = right,
-            } };
+            
+            binary_op.* = Expression{
+                .BinaryOp = .{
+                    .left = left,
+                    .operator = operator,
+                    .right = right,
+                },
+            };
 
             left = binary_op;
         }
@@ -214,7 +236,7 @@ pub const Parser = struct {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    const source: []const u8 = "_hello = 74 + 2\n_test = 5 * 3\n_div = 15 / 3\n_sub = 10 - 4";
+    const source: []const u8 = "_hello = 74 + 2\n_test = 5 * 3\n_div = 15 / 3\n_sub = 10 - 4\nprec = 2 + 4 * 2";
 
     var limonaca_lexer = lexer.Lexer.init(allocator, source);
     try limonaca_lexer.scan();
