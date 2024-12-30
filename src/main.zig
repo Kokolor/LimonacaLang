@@ -4,6 +4,7 @@ const lexer = @import("lexer.zig");
 pub const ParserError = error{
     ExpectedIdentifier,
     ExpectedEqual,
+    ExpectedVar,
     ExpectedNumber,
     ExpectedOperator,
     UnexpectedToken,
@@ -149,8 +150,11 @@ pub const Parser = struct {
     }
 
     pub fn parseStatement(self: *Parser) !Statement {
-        const token = self.peek();
+        if (!self.match(lexer.TokenType.Var)) {
+            return ParserError.ExpectedVar;
+        }
 
+        const token = self.peek();
         if (token.type != lexer.TokenType.Identifier) {
             return ParserError.ExpectedIdentifier;
         }
@@ -234,7 +238,7 @@ pub const Parser = struct {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    const source: []const u8 = "_hello = 74 + 2;\n_test = 5 * 3;\n_div = 15 / 3;\n_sub = 10 - 4;\nprec = 2 + 4 * 2;";
+    const source: []const u8 = "var hello = 74 + 2;";
 
     var limonaca_lexer = lexer.Lexer.init(allocator, source);
     try limonaca_lexer.scan();

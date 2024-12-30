@@ -1,5 +1,4 @@
 const std = @import("std");
-
 pub const TokenType = enum {
     Plus,
     Minus,
@@ -11,6 +10,13 @@ pub const TokenType = enum {
     Semicolon,
     Identifier,
     Eof,
+    
+    Var,
+    Fn,
+    If,
+    Else,
+    While,
+    Return,
 };
 
 pub const Token = struct {
@@ -28,12 +34,22 @@ pub const Lexer = struct {
     start: u64 = 0,
     current: u64 = 0,
     line: u64 = 1,
+    keywords: std.StringHashMap(TokenType),
 
     pub fn init(allocator: std.mem.Allocator, source: []const u8) Lexer {
+        var keywords = std.StringHashMap(TokenType).init(allocator);
+        keywords.put("var", TokenType.Var) catch unreachable;
+        keywords.put("fn", TokenType.Fn) catch unreachable;
+        keywords.put("if", TokenType.If) catch unreachable;
+        keywords.put("else", TokenType.Else) catch unreachable;
+        keywords.put("while", TokenType.While) catch unreachable;
+        keywords.put("return", TokenType.Return) catch unreachable;
+
         return Lexer{
             .allocator = allocator,
             .tokens = std.ArrayList(Token).init(allocator),
             .source = source,
+            .keywords = keywords,
         };
     }
 
@@ -41,13 +57,11 @@ pub const Lexer = struct {
         while (!self.isAtEnd()) {
             const character = self.source[self.current];
             self.current += 1;
-
             if (std.ascii.isDigit(character) or character == '_') {
                 self.start = self.current - 1;
                 while (!self.isAtEnd() and (std.ascii.isAlphanumeric(self.source[self.current]) or self.source[self.current] == '_')) {
                     self.current += 1;
                 }
-
                 const token_value = self.source[self.start..self.current];
                 if (std.ascii.isDigit(token_value[0])) {
                     try self.tokens.append(Token{ .type = TokenType.Number, .value = token_value, .line = self.line });
@@ -56,17 +70,16 @@ pub const Lexer = struct {
                 }
                 continue;
             }
-
             if (std.ascii.isAlphanumeric(character)) {
                 self.start = self.current - 1;
                 while (!self.isAtEnd() and (std.ascii.isAlphanumeric(self.source[self.current]) or self.source[self.current] == '_')) {
                     self.current += 1;
                 }
-
-                try self.tokens.append(Token{ .type = TokenType.Identifier, .value = self.source[self.start..self.current], .line = self.line });
+                const identifier = self.source[self.start..self.current];
+                const token_type = self.keywords.get(identifier) orelse TokenType.Identifier;
+                try self.tokens.append(Token{ .type = token_type, .value = identifier, .line = self.line });
                 continue;
             }
-
             switch (character) {
                 ' ' => {},
                 '\t' => {},
@@ -90,7 +103,6 @@ pub const Lexer = struct {
                 },
             }
         }
-
         try self.tokens.append(Token{ .type = TokenType.Eof, .value = null, .line = self.line });
     }
 
