@@ -163,6 +163,10 @@ pub const Parser = struct {
 
         const expr = try self.parseExpression();
 
+        if (!self.match(lexer.TokenType.Semicolon)) {
+            return ParserError.UnexpectedToken;
+        }
+
         return Statement{
             .identifier = token.value.?,
             .expression = expr,
@@ -196,7 +200,7 @@ pub const Parser = struct {
             const operator = self.tokens[self.current - 1].type;
             const right = try self.parsePrimary();
             const binary_op = try self.allocator.create(Expression);
-            
+
             binary_op.* = Expression{
                 .BinaryOp = .{
                     .left = left,
@@ -225,18 +229,12 @@ pub const Parser = struct {
 
         return number;
     }
-
-    pub fn skipNewlines(self: *Parser) void {
-        while (self.peek().type == lexer.TokenType.Identifier and self.peek().value.?[0] == '\n') {
-            _ = self.advance();
-        }
-    }
 };
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    const source: []const u8 = "_hello = 74 + 2\n_test = 5 * 3\n_div = 15 / 3\n_sub = 10 - 4\nprec = 2 + 4 * 2";
+    const source: []const u8 = "_hello = 74 + 2;\n_test = 5 * 3;\n_div = 15 / 3;\n_sub = 10 - 4;\nprec = 2 + 4 * 2;";
 
     var limonaca_lexer = lexer.Lexer.init(allocator, source);
     try limonaca_lexer.scan();
@@ -253,7 +251,6 @@ pub fn main() !void {
         try stdout.print(" => {d}\n", .{result});
 
         try parser.variables.set(stmt.identifier, result);
-        parser.skipNewlines();
     }
 
     try parser.variables.print(stdout);
