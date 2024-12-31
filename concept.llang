@@ -1,14 +1,14 @@
-extern write(txt: str, ...);
+extern fn write: txt -> str, ...;
 
-const message: str = "Hello, World!\n";
-const number: i16 = 47;
+var message = "Hello, World!\n" -> str: (const);
+var number = 14 -> i16: (const);
 
-fn add(x: i32, y: i32): i32 = {
+fn add: x -> i32, y -> i32 = (
     return x + y;
-}
+) -> i32;
 
-fn main(): void = {
-    var sum: i32 = add(<i32>number, 13);
-    write("String: {}\nSum: {}", message, sum);
+fn main = (
+    var sum = add(<i32>number, 7) -> i32;
+    write(sum);
     return 0;
-}
+) -> i32;
