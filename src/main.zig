@@ -11,6 +11,10 @@ pub const ParserError = error{
     DivisionByZero,
 };
 
+pub const StatementType = enum {
+    VarDeclaration,
+};
+
 pub const ExpressionType = enum {
     Number,
     BinaryOp,
@@ -65,16 +69,38 @@ pub const Expression = union(ExpressionType) {
     }
 };
 
-pub const Statement = struct {
+pub const Statement = union(StatementType) {
+    VarDeclaration: VarDeclarationStmt,
+
+    pub fn print(self: Statement, writer: anytype) !void {
+        switch (self) {
+            .VarDeclaration => |stmt| try stmt.print(writer),
+        }
+    }
+
+    pub fn evaluate(self: Statement) !f64 {
+        return switch (self) {
+            .VarDeclaration => |stmt| stmt.evaluate(),
+        };
+    }
+
+    pub fn getIdentifier(self: Statement) []const u8 {
+        return switch (self) {
+            .VarDeclaration => |stmt| stmt.identifier,
+        };
+    }
+};
+
+pub const VarDeclarationStmt = struct {
     identifier: []const u8,
     expression: *Expression,
 
-    pub fn print(self: Statement, writer: anytype) !void {
+    pub fn print(self: VarDeclarationStmt, writer: anytype) !void {
         try writer.print("{s} = ", .{self.identifier});
         try self.expression.print(writer, 0);
     }
 
-    pub fn evaluate(self: Statement) !f64 {
+    pub fn evaluate(self: VarDeclarationStmt) !f64 {
         return self.expression.evaluate();
     }
 };
@@ -150,15 +176,21 @@ pub const Parser = struct {
     }
 
     pub fn parseStatement(self: *Parser) !Statement {
-        if (!self.match(lexer.TokenType.Var)) {
-            return ParserError.ExpectedVar;
-        }
-
         const token = self.peek();
-        if (token.type != lexer.TokenType.Identifier) {
+
+        return switch (token.type) {
+            .Var => try self.parseVarDeclaration(),
+            else => ParserError.UnexpectedToken,
+        };
+    }
+
+    fn parseVarDeclaration(self: *Parser) !Statement {
+        _ = self.advance();
+
+        const identifier = self.peek();
+        if (identifier.type != lexer.TokenType.Identifier) {
             return ParserError.ExpectedIdentifier;
         }
-
         _ = self.advance();
 
         if (!self.match(lexer.TokenType.Equal)) {
@@ -172,8 +204,10 @@ pub const Parser = struct {
         }
 
         return Statement{
-            .identifier = token.value.?,
-            .expression = expr,
+            .VarDeclaration = .{
+                .identifier = identifier.value.?,
+                .expression = expr,
+            },
         };
     }
 
@@ -238,7 +272,7 @@ pub const Parser = struct {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    const source: []const u8 = "var hello = 74 + 2;";
+    const source: []const u8 = "var hello = 2 + 2 * 6;";
 
     var limonaca_lexer = lexer.Lexer.init(allocator, source);
     try limonaca_lexer.scan();
@@ -254,7 +288,7 @@ pub fn main() !void {
         const result = try stmt.evaluate();
         try stdout.print(" => {d}\n", .{result});
 
-        try parser.variables.set(stmt.identifier, result);
+        try parser.variables.set(stmt.getIdentifier(), result);
     }
 
     try parser.variables.print(stdout);
