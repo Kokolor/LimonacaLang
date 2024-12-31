@@ -7,6 +7,9 @@ pub const ParserError = error{
     ExpectedVar,
     ExpectedNumber,
     ExpectedOperator,
+    ExpectedArrow,
+    ExpectedSemicolon,
+    ExpectedType,
     UnexpectedToken,
     DivisionByZero,
 };
@@ -94,10 +97,12 @@ pub const Statement = union(StatementType) {
 pub const VarDeclarationStmt = struct {
     identifier: []const u8,
     expression: *Expression,
+    type: lexer.TokenType,
 
     pub fn print(self: VarDeclarationStmt, writer: anytype) !void {
         try writer.print("{s} = ", .{self.identifier});
         try self.expression.print(writer, 0);
+        try writer.print(" -> {s}", .{@tagName(self.type)});
     }
 
     pub fn evaluate(self: VarDeclarationStmt) !f64 {
@@ -199,14 +204,25 @@ pub const Parser = struct {
 
         const expr = try self.parseExpression();
 
+        if (!self.match(lexer.TokenType.Arrow)) {
+            return ParserError.ExpectedArrow;
+        }
+
+        const type_token = self.peek();
+        if (type_token.type != lexer.TokenType.i16 and type_token.type != lexer.TokenType.i32) {
+            return ParserError.ExpectedType;
+        }
+        _ = self.advance();
+
         if (!self.match(lexer.TokenType.Semicolon)) {
-            return ParserError.UnexpectedToken;
+            return ParserError.ExpectedSemicolon;
         }
 
         return Statement{
             .VarDeclaration = .{
                 .identifier = identifier.value.?,
                 .expression = expr,
+                .type = type_token.type,
             },
         };
     }
@@ -272,7 +288,7 @@ pub const Parser = struct {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    const source: []const u8 = "var hello = 2 + 2 * 6;";
+    const source: []const u8 = "var hello = 2 + 2 * 6 -> i32;";
 
     var limonaca_lexer = lexer.Lexer.init(allocator, source);
     try limonaca_lexer.scan();
@@ -286,7 +302,7 @@ pub fn main() !void {
         try stmt.print(stdout);
 
         const result = try stmt.evaluate();
-        try stdout.print(" => {d}\n", .{result});
+        try stdout.print(" => {d}: {s}\n", .{result});
 
         try parser.variables.set(stmt.getIdentifier(), result);
     }

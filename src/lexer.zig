@@ -9,8 +9,12 @@ pub const TokenType = enum {
     Colon,
     Semicolon,
     Identifier,
+    Arrow,
     Eof,
-    
+
+    i16,
+    i32,
+
     Var,
     Fn,
     If,
@@ -38,6 +42,8 @@ pub const Lexer = struct {
 
     pub fn init(allocator: std.mem.Allocator, source: []const u8) Lexer {
         var keywords = std.StringHashMap(TokenType).init(allocator);
+        keywords.put("i16", TokenType.i16) catch unreachable;
+        keywords.put("i32", TokenType.i32) catch unreachable;
         keywords.put("var", TokenType.Var) catch unreachable;
         keywords.put("fn", TokenType.Fn) catch unreachable;
         keywords.put("if", TokenType.If) catch unreachable;
@@ -57,6 +63,13 @@ pub const Lexer = struct {
         while (!self.isAtEnd()) {
             const character = self.source[self.current];
             self.current += 1;
+
+            if (character == '-' and !self.isAtEnd() and self.source[self.current] == '>') {
+                self.current += 1;
+                try self.tokens.append(Token{ .type = TokenType.Arrow, .value = "->", .line = self.line });
+                continue;
+            }
+
             if (std.ascii.isDigit(character) or character == '_') {
                 self.start = self.current - 1;
                 while (!self.isAtEnd() and (std.ascii.isAlphanumeric(self.source[self.current]) or self.source[self.current] == '_')) {
