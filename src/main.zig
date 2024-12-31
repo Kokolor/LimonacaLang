@@ -92,6 +92,12 @@ pub const Statement = union(StatementType) {
             .VarDeclaration => |stmt| stmt.identifier,
         };
     }
+
+    pub fn getType(self: Statement) lexer.TokenType {
+        return switch (self) {
+            .VarDeclaration => |stmt| stmt.type,
+        };
+    }
 };
 
 pub const VarDeclarationStmt = struct {
@@ -110,20 +116,25 @@ pub const VarDeclarationStmt = struct {
     }
 };
 
+pub const VariableInfo = struct {
+    value: f64,
+    type: lexer.TokenType,
+};
+
 pub const Variables = struct {
-    map: std.StringHashMap(f64),
+    map: std.StringHashMap(VariableInfo),
 
     pub fn init(allocator: std.mem.Allocator) Variables {
         return Variables{
-            .map = std.StringHashMap(f64).init(allocator),
+            .map = std.StringHashMap(VariableInfo).init(allocator),
         };
     }
 
-    pub fn set(self: *Variables, name: []const u8, value: f64) !void {
-        try self.map.put(name, value);
+    pub fn set(self: *Variables, name: []const u8, value: f64, var_type: lexer.TokenType) !void {
+        try self.map.put(name, .{ .value = value, .type = var_type });
     }
 
-    pub fn get(self: Variables, name: []const u8) ?f64 {
+    pub fn get(self: Variables, name: []const u8) ?VariableInfo {
         return self.map.get(name);
     }
 
@@ -131,7 +142,7 @@ pub const Variables = struct {
         try writer.writeAll("\nVariables:\n");
         var it = self.map.iterator();
         while (it.next()) |entry| {
-            try writer.print("  {s} = {d}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+            try writer.print("  {s} = {d}: {s}\n", .{ entry.key_ptr.*, entry.value_ptr.*.value, @tagName(entry.value_ptr.*.type) });
         }
     }
 };
@@ -302,9 +313,9 @@ pub fn main() !void {
         try stmt.print(stdout);
 
         const result = try stmt.evaluate();
-        try stdout.print(" => {d}: {s}\n", .{result});
+        try stdout.print(" => {d}\n", .{result});
 
-        try parser.variables.set(stmt.getIdentifier(), result);
+        try parser.variables.set(stmt.getIdentifier(), result, stmt.getType());
     }
 
     try parser.variables.print(stdout);
