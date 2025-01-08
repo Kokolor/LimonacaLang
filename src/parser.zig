@@ -11,11 +11,16 @@ pub const ParserError = error{
     ExpectedSemicolon,
     ExpectedType,
     UnexpectedToken,
+    ExpectedFunction,
+    ExpectedLeftParen,
+    ExpectedRightParen,
     DivisionByZero,
+    OutOfMemory,
+    InvalidCharacter,
 };
-
 pub const StatementType = enum {
     VarDeclaration,
+    Function,
 };
 
 pub const ExpressionType = enum {
@@ -74,28 +79,19 @@ pub const Expression = union(ExpressionType) {
 
 pub const Statement = union(StatementType) {
     VarDeclaration: VarDeclarationStmt,
+    Function: FunctionStmt,
 
     pub fn print(self: Statement, writer: anytype) !void {
         switch (self) {
             .VarDeclaration => |stmt| try stmt.print(writer),
+            .Function => |stmt| try stmt.print(writer),
         }
     }
 
-    pub fn evaluate(self: Statement) !f64 {
+    pub fn evaluate(self: Statement) ParserError!f64 {
         return switch (self) {
             .VarDeclaration => |stmt| stmt.evaluate(),
-        };
-    }
-
-    pub fn getIdentifier(self: Statement) []const u8 {
-        return switch (self) {
-            .VarDeclaration => |stmt| stmt.identifier,
-        };
-    }
-
-    pub fn getType(self: Statement) lexer.TokenType {
-        return switch (self) {
-            .VarDeclaration => |stmt| stmt.type,
+            .Function => |stmt| stmt.evaluate(),
         };
     }
 };
@@ -111,8 +107,32 @@ pub const VarDeclarationStmt = struct {
         try writer.print(" -> {s}", .{@tagName(self.type)});
     }
 
-    pub fn evaluate(self: VarDeclarationStmt) !f64 {
+    pub fn evaluate(self: VarDeclarationStmt) ParserError!f64 {
         return self.expression.evaluate();
+    }
+};
+
+pub const FunctionStmt = struct {
+    name: []const u8,
+    body: []Statement,
+    return_type: lexer.TokenType,
+
+    pub fn print(self: FunctionStmt, writer: anytype) !void {
+        try writer.print("fn {s} = (\n", .{self.name});
+        for (self.body) |stmt| {
+            try writer.writeAll("    ");
+            try stmt.print(writer);
+            try writer.writeAll("\n");
+        }
+        try writer.print(") -> {s}", .{@tagName(self.return_type)});
+    }
+
+    pub fn evaluate(self: FunctionStmt) ParserError!f64 {
+        var last_value: f64 = 0;
+        for (self.body) |stmt| {
+            last_value = try stmt.evaluate();
+        }
+        return last_value;
     }
 };
 
@@ -191,11 +211,12 @@ pub const Parser = struct {
         return false;
     }
 
-    pub fn parseStatement(self: *Parser) !Statement {
+    pub fn parseStatement(self: *Parser) ParserError!Statement {
         const token = self.peek();
 
         return switch (token.type) {
             .Var => try self.parseVarDeclaration(),
+            .Fn => try self.parseFunction(),
             else => ParserError.UnexpectedToken,
         };
     }
@@ -234,6 +255,54 @@ pub const Parser = struct {
                 .identifier = identifier.value.?,
                 .expression = expr,
                 .type = type_token.type,
+            },
+        };
+    }
+
+    fn parseFunction(self: *Parser) !Statement {
+        _ = self.advance();
+
+        const name_token = self.peek();
+        if (name_token.type != lexer.TokenType.Identifier) {
+            return ParserError.ExpectedIdentifier;
+        }
+        _ = self.advance();
+
+        if (!self.match(lexer.TokenType.Equal)) {
+            return ParserError.ExpectedEqual;
+        }
+
+        if (!self.match(lexer.TokenType.LeftParen)) {
+            return ParserError.ExpectedLeftParen;
+        }
+
+        var body = std.ArrayList(Statement).init(self.allocator);
+        while (!self.match(lexer.TokenType.RightParen)) {
+            const stmt = try self.parseStatement();
+            try body.append(stmt);
+        }
+
+        if (!self.match(lexer.TokenType.Arrow)) {
+            return ParserError.ExpectedArrow;
+        }
+
+        const return_type_token = self.peek();
+        if (return_type_token.type != lexer.TokenType.i16 and
+            return_type_token.type != lexer.TokenType.i32)
+        {
+            return ParserError.ExpectedType;
+        }
+        _ = self.advance();
+
+        if (!self.match(lexer.TokenType.Semicolon)) {
+            return ParserError.ExpectedSemicolon;
+        }
+
+        return Statement{
+            .Function = .{
+                .name = name_token.value.?,
+                .body = try body.toOwnedSlice(),
+                .return_type = return_type_token.type,
             },
         };
     }

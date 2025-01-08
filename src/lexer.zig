@@ -9,6 +9,8 @@ pub const TokenType = enum {
     Colon,
     Semicolon,
     Identifier,
+    LeftParen,
+    RightParen,
     Arrow,
     Eof,
 
@@ -109,6 +111,8 @@ pub const Lexer = struct {
                         '=' => TokenType.Equal,
                         ':' => TokenType.Colon,
                         ';' => TokenType.Semicolon,
+                        '(' => TokenType.LeftParen,
+                        ')' => TokenType.RightParen,
                         else => {
                             return LexerError.UnknownCharacter;
                         },

@@ -12,6 +12,8 @@ pub const CodeGenerator = struct {
     variables: std.StringHashMap(Variable),
     current_stack_offset: i32,
     label_counter: usize,
+    current_function: ?[]const u8,
+    is_main_generated: bool,
 
     pub fn init(writer: std.fs.File.Writer) CodeGenerator {
         return CodeGenerator{
@@ -19,6 +21,8 @@ pub const CodeGenerator = struct {
             .variables = std.StringHashMap(Variable).init(std.heap.page_allocator),
             .current_stack_offset = 0,
             .label_counter = 0,
+            .current_function = null,
+            .is_main_generated = false,
         };
     }
 
@@ -37,9 +41,57 @@ pub const CodeGenerator = struct {
             \\section .text
             \\global _start
             \\
-            \\_start:
+        );
+    }
+
+    pub fn generateFunction(self: *CodeGenerator, func: parser.FunctionStmt) !void {
+        self.current_function = func.name;
+
+        if (std.mem.eql(u8, func.name, "main")) {
+            try self.writer.writeAll("_start:\n");
+            self.is_main_generated = true;
+        } else {
+            try self.writer.print("{s}:\n", .{func.name});
+        }
+
+        try self.writer.writeAll(
             \\    push rbp
             \\    mov rbp, rsp
+            \\
+        );
+
+        for (func.body) |stmt| {
+            switch (stmt) {
+                .VarDeclaration => |var_decl| try self.generateVarDeclaration(var_decl),
+                .Function => unreachable,
+            }
+        }
+
+        if (std.mem.eql(u8, func.name, "main")) {
+            try self.generateMainReturn();
+        } else {
+            try self.generateFunctionReturn();
+        }
+    }
+
+    fn generateMainReturn(self: *CodeGenerator) !void {
+        try self.writer.writeAll(
+            \\    mov rax, 0      ; Return value
+            \\    mov rsp, rbp    ; Restore stack
+            \\    pop rbp         ; Restore base pointer
+            \\    mov rdi, rax    ; Exit code
+            \\    mov rax, 60     ; sys_exit
+            \\    syscall
+            \\
+        );
+    }
+
+    fn generateFunctionReturn(self: *CodeGenerator) !void {
+        try self.writer.writeAll(
+            \\    mov rax, 0      ; Return value
+            \\    mov rsp, rbp    ; Restore stack
+            \\    pop rbp         ; Restore base pointer
+            \\    ret
             \\
         );
     }
@@ -96,26 +148,16 @@ pub const CodeGenerator = struct {
             else => unreachable,
         }
     }
-
-    pub fn generateExit(self: *CodeGenerator) !void {
-        try self.writer.writeAll(
-            \\    mov rsp, rbp
-            \\    pop rbp
-            \\
-        );
-
-        try self.writer.writeAll(
-            \\    mov rax, 60
-            \\    xor rdi, rdi
-            \\    syscall
-            \\
-        );
-    }
 };
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
-    const source: []const u8 = "var hello = 2 + 2 * 6 -> i32;\n var test = 4 * 2 -> i32;";
+    const source =
+        \\fn main = (
+        \\    var sum = 42 + 3 -> i32;
+        \\) -> i32;
+        \\
+    ;
 
     const asm_file = try std.fs.cwd().createFile("output.s", .{});
     defer asm_file.close();
@@ -130,13 +172,10 @@ pub fn main() !void {
 
     while (!limonaca_parser.isAtEnd()) {
         const stmt = try limonaca_parser.parseStatement();
-        const result = try stmt.evaluate();
-        try limonaca_parser.variables.set(stmt.getIdentifier(), result, stmt.getType());
 
         switch (stmt) {
             .VarDeclaration => |var_decl| try code_generator.generateVarDeclaration(var_decl),
+            .Function => |func| try code_generator.generateFunction(func),
         }
     }
-
-    try code_generator.generateExit();
 }
